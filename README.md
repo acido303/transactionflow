@@ -6,6 +6,50 @@ A Spring Boot producer generates random transaction events and publishes them to
 
 ---
 
+## Screenshots
+
+### Dashboard
+Pipeline component status cards and summary metrics, refreshing live.
+
+![Pipeline dashboard](docs/screenshots/pipeline_dashboard.png)
+
+### Architecture & Live Data Flow
+React Flow diagram with per-node live counters and animated edges. Nodes are draggable and the layout is saved to the browser.
+
+![Architecture & live data flow](docs/screenshots/architecture.png)
+
+### Transaction Map
+World map shaded by activity per country, switchable between transaction count, total/average amount, high-value, and rejected counts.
+
+![Transaction world map](docs/screenshots/map.png)
+
+### Data Generator
+Start/stop the generator, fire single transactions or bursts, and edit the reference-data lists (merchants, ISO countries, unknown types).
+
+![Data generator](docs/screenshots/data_generator.png)
+
+### Metrics
+Aggregations by currency, transaction type, and country.
+
+![Metrics](docs/screenshots/metrics.png)
+
+### Recent Transactions
+Live feed of processed transactions with colour-coded status badges.
+
+![Recent transactions](docs/screenshots/recent_transactions.png)
+
+### High-Value Transactions
+Transactions detected above the high-value threshold.
+
+![High-value transactions](docs/screenshots/high_value_transactions.png)
+
+### HDFS Storage
+HDFS paths, file counts, and checkpoint status.
+
+![HDFS storage](docs/screenshots/HDFS_storage.png)
+
+---
+
 ## Architecture
 
 ```
