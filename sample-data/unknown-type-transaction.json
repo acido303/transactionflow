@@ -1,0 +1,13 @@
+{
+  "transactionId": "018f2f5c-7b6a-7cc2-9c35-7a9f8e5b6c24",
+  "accountId": "ACC-10004",
+  "customerId": "CUS-50004",
+  "transactionType": "APPLE_PAY",
+  "originalTransactionType": null,
+  "amount": 9.99,
+  "currency": "GBP",
+  "merchant": "Spotify",
+  "countryCode": "GB",
+  "countryName": "United Kingdom",
+  "createdAt": "2026-06-04T12:33:00Z"
+}

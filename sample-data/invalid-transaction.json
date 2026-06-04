@@ -1,0 +1,13 @@
+{
+  "transactionId": "018f2f5c-7b6a-7cc2-9c35-7a9f8e5b6c22",
+  "accountId": "ACC-10002",
+  "customerId": "CUS-50002",
+  "transactionType": "CARD_PAYMENT",
+  "originalTransactionType": null,
+  "amount": -10.00,
+  "currency": "EUR",
+  "merchant": "Tesco",
+  "countryCode": "IE",
+  "countryName": "Ireland",
+  "createdAt": "2026-06-04T12:31:00Z"
+}

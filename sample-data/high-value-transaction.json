@@ -1,0 +1,13 @@
+{
+  "transactionId": "018f2f5c-7b6a-7cc2-9c35-7a9f8e5b6c23",
+  "accountId": "ACC-10003",
+  "customerId": "CUS-50003",
+  "transactionType": "BANK_TRANSFER",
+  "originalTransactionType": null,
+  "amount": 25000.00,
+  "currency": "EUR",
+  "merchant": null,
+  "countryCode": "DE",
+  "countryName": "Germany",
+  "createdAt": "2026-06-04T12:32:00Z"
+}

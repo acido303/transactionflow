@@ -1,0 +1,13 @@
+{
+  "transactionId": "018f2f5c-7b6a-7cc2-9c35-7a9f8e5b6c21",
+  "accountId": "ACC-10001",
+  "customerId": "CUS-50001",
+  "transactionType": "CARD_PAYMENT",
+  "originalTransactionType": null,
+  "amount": 149.99,
+  "currency": "EUR",
+  "merchant": "Amazon",
+  "countryCode": "IE",
+  "countryName": "Ireland",
+  "createdAt": "2026-06-04T12:30:00Z"
+}
