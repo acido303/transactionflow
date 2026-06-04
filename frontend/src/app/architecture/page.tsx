@@ -198,7 +198,7 @@ function ArchitectureFlow() {
             size={1}
             color="#334155"
           />
-          <Controls className="!bg-slate-800 !border-slate-700" />
+          <Controls className="!bg-black !border-slate-600 [&_.react-flow__controls-button]:!bg-black [&_.react-flow__controls-button]:!border-slate-600 [&_.react-flow__controls-button]:!text-white [&_.react-flow__controls-button_svg]:!fill-white" />
         </ReactFlow>
       </div>
     </div>

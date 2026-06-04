@@ -4,6 +4,8 @@ import org.apache.spark.sql.*;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 
+import org.apache.spark.api.java.function.VoidFunction2;
+
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Arrays;
@@ -119,16 +121,20 @@ public class TransactionFlowStreamingJob {
 
         // ── JDBC properties (reused by every batch write) ─────────────────────
         Properties jdbcProps = new Properties();
-        jdbcProps.setProperty("user",   postgresUser);
+        jdbcProps.setProperty("user",     postgresUser);
         jdbcProps.setProperty("password", postgresPassword);
-        jdbcProps.setProperty("driver", "org.postgresql.Driver");
+        jdbcProps.setProperty("driver",   "org.postgresql.Driver");
+        // Sends strings as untyped so PostgreSQL casts them to the target column type
+        // (e.g. VARCHAR "018f..." → UUID column). Without this the driver sends VARCHAR
+        // and PostgreSQL rejects the type mismatch.
+        jdbcProps.setProperty("stringtype", "unspecified");
 
         // ── Start the main foreachBatch streaming query ───────────────────────
         // start() registers the query with spark.streams(); we use awaitAnyTermination below.
         parsed.writeStream()
                 .queryName("main-transaction-processor")
                 .option("checkpointLocation", hdfsCheckpointPath + "/main")
-                .foreachBatch((batchDf, batchId) ->
+                .foreachBatch((VoidFunction2<Dataset<Row>, Long>) (batchDf, batchId) ->
                         processBatch(batchDf, batchId,
                                 hdfsRawPath, hdfsRejectedPath,
                                 postgresUrl, jdbcProps,
@@ -289,24 +295,15 @@ public class TransactionFlowStreamingJob {
         // 6c. Metrics by country
         try {
             if (validCount > 0) {
-                // Count high-value transactions per country in this batch
-                Dataset<Row> highValuePerCountry = valid
-                        .filter(col("amount").geq(highValueThreshold))
-                        .groupBy("countryCode")
-                        .agg(count("*").as("high_value_count_per_cc"));
-
                 Dataset<Row> metricsCountry = valid
                         .groupBy("countryCode", "countryName")
                         .agg(
                                 count("*").as("transaction_count"),
                                 sum("amount").as("total_amount"),
                                 avg("amount").as("average_amount"),
-                                max("createdAt").as("last_transaction_at_str")
+                                max("createdAt").as("last_transaction_at_str"),
+                                count(when(col("amount").geq(highValueThreshold), lit(1))).as("high_value_count")
                         )
-                        .join(highValuePerCountry, Arrays.asList("countryCode"), "left")
-                        .withColumn("high_value_count",
-                                when(col("high_value_count_per_cc").isNull(), lit(0L))
-                                        .otherwise(col("high_value_count_per_cc")))
                         .withColumn("rejected_count", lit(0L))
                         .withColumn("window_start", lit(windowStart.toString()).cast("timestamp"))
                         .withColumn("window_end",   lit(windowEnd.toString()).cast("timestamp"))
@@ -373,11 +370,12 @@ public class TransactionFlowStreamingJob {
                     .withColumnRenamed("transactionType", "transaction_type")
                     .withColumnRenamed("countryCode",     "country_code")
                     .withColumnRenamed("countryName",     "country_name")
-                    .select("transaction_id", "account_id", "customer_id",
-                            "transaction_type", "amount", "currency",
-                            "merchant", "country_code", "country_name",
-                            "status", "rejection_reason",
-                            col("created_at_ts").as("created_at"), "processed_at");
+                    .select(
+                            col("transaction_id"), col("account_id"), col("customer_id"),
+                            col("transaction_type"), col("amount"), col("currency"),
+                            col("merchant"), col("country_code"), col("country_name"),
+                            col("status"), col("rejection_reason"),
+                            col("created_at_ts").as("created_at"), col("processed_at"));
 
             // Rejected records
             Dataset<Row> recentRejected = rejected

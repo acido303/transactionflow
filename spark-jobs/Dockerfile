@@ -12,7 +12,7 @@ COPY src/ ./src/
 RUN mvn package -DskipTests -q
 
 # Stage 2: Runtime image
-FROM bitnami/spark:3.5
+FROM apache/spark:3.5.1
 
 USER root
 
@@ -20,6 +20,6 @@ COPY --from=builder /app/target/spark-streaming-job-*.jar /app/spark-job.jar
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-USER 1001
+USER spark
 
 ENTRYPOINT ["/app/entrypoint.sh"]

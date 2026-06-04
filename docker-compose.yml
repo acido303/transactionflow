@@ -1,47 +1,47 @@
-version: "3.9"
-
 services:
 
   # ─── Kafka (KRaft mode, no ZooKeeper) ───────────────────────────────────────
   kafka:
-    image: bitnami/kafka:3.7
+    image: apache/kafka:3.7.1
     container_name: transactionflow-kafka
     hostname: kafka
     ports:
       - "${KAFKA_PORT}:9092"
     environment:
-      - KAFKA_CFG_NODE_ID=1
-      - KAFKA_CFG_PROCESS_ROLES=broker,controller
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=${KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE}
-      - ALLOW_PLAINTEXT_LISTENER=yes
-      - KAFKA_KRAFT_CLUSTER_ID=${KAFKA_KRAFT_CLUSTER_ID}
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=${KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE}
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - CLUSTER_ID=${KAFKA_KRAFT_CLUSTER_ID}
     volumes:
-      - kafka-data:/bitnami/kafka
+      - kafka-data:/var/lib/kafka/data
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
       interval: 15s
       timeout: 10s
-      retries: 10
-      start_period: 30s
+      retries: 15
+      start_period: 45s
     networks:
       - transactionflow-net
 
   kafka-init:
-    image: bitnami/kafka:3.7
+    image: apache/kafka:3.7.1
     container_name: transactionflow-kafka-init
     depends_on:
       kafka:
         condition: service_healthy
     command: >
       bash -c "
-        kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP_SERVERS} --create --if-not-exists --topic ${KAFKA_TOPIC_RAW} --partitions 3 --replication-factor 1 &&
-        kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP_SERVERS} --create --if-not-exists --topic ${KAFKA_TOPIC_VALIDATED} --partitions 3 --replication-factor 1 &&
-        kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP_SERVERS} --create --if-not-exists --topic ${KAFKA_TOPIC_REJECTED} --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP_SERVERS} --create --if-not-exists --topic ${KAFKA_TOPIC_RAW} --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP_SERVERS} --create --if-not-exists --topic ${KAFKA_TOPIC_VALIDATED} --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP_SERVERS} --create --if-not-exists --topic ${KAFKA_TOPIC_REJECTED} --partitions 3 --replication-factor 1 &&
         echo 'Kafka topics created successfully'
       "
     networks:
@@ -99,6 +99,10 @@ services:
     image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
     container_name: transactionflow-hdfs-namenode
     hostname: hdfs-namenode
+    # extra_hosts ensures the container can resolve its own hostname before Java starts,
+    # preventing AuthenticationFilterInitializer from failing on InetAddress.getLocalHost()
+    extra_hosts:
+      - "hdfs-namenode:127.0.0.1"
     ports:
       - "${HDFS_NAMENODE_HTTP_PORT}:9870"
       - "${HDFS_NAMENODE_RPC_PORT}:9000"
@@ -108,13 +112,15 @@ services:
       - HDFS_CONF_dfs_replication=${HDFS_REPLICATION}
       - HDFS_CONF_dfs_permissions_enabled=${HDFS_PERMISSIONS_ENABLED}
       - HDFS_CONF_dfs_namenode_name_dir=file:///hadoop/dfs/name
+      - CORE_CONF_hadoop_security_authentication=simple
+      - CORE_CONF_hadoop_security_authorization=false
     volumes:
       - hdfs-namenode-data:/hadoop/dfs/name
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9870 || exit 1"]
+      test: ["CMD-SHELL", "hdfs dfsadmin -safemode get 2>&1 | grep -q 'Safe mode is OFF'"]
       interval: 20s
-      timeout: 10s
-      retries: 15
+      timeout: 15s
+      retries: 20
       start_period: 60s
     networks:
       - transactionflow-net
@@ -125,7 +131,7 @@ services:
     hostname: hdfs-datanode
     depends_on:
       hdfs-namenode:
-        condition: service_healthy
+        condition: service_started
     environment:
       - CORE_CONF_fs_defaultFS=${HDFS_DEFAULT_FS}
       - HDFS_CONF_dfs_replication=${HDFS_REPLICATION}
@@ -137,56 +143,56 @@ services:
       - transactionflow-net
 
   hdfs-init:
-    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    image: curlimages/curl:latest
     container_name: transactionflow-hdfs-init
     depends_on:
       hdfs-namenode:
         condition: service_healthy
-      hdfs-datanode:
-        condition: service_started
-    command: >
-      bash -c "
-        sleep 10 &&
-        hdfs dfs -mkdir -p /data/transactionflow/raw/transactions &&
-        hdfs dfs -mkdir -p /data/transactionflow/rejected/transactions &&
-        hdfs dfs -mkdir -p /data/transactionflow/processed/transactions &&
-        hdfs dfs -mkdir -p /data/transactionflow/checkpoints &&
-        hdfs dfs -chmod -R 777 /data &&
-        echo 'HDFS directories created successfully'
-      "
-    environment:
-      - CORE_CONF_fs_defaultFS=${HDFS_DEFAULT_FS}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        BASE="http://hdfs-namenode:9870/webhdfs/v1"
+        for DIR in \
+          "/data/transactionflow/raw/transactions" \
+          "/data/transactionflow/rejected/transactions" \
+          "/data/transactionflow/processed/transactions" \
+          "/data/transactionflow/checkpoints"; do
+          echo "Creating HDFS dir: $$DIR"
+          response=$$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X PUT "$$BASE$$DIR?op=MKDIRS&user.name=hdfs")
+          body=$$(echo "$$response" | head -1)
+          status=$$(echo "$$response" | grep 'HTTP_STATUS' | cut -d: -f2)
+          echo "  Response: $$body  (HTTP $$status)"
+          if [ "$$status" != "200" ]; then
+            echo "ERROR: MKDIRS failed for $$DIR with HTTP $$status"
+            exit 1
+          fi
+        done
+        echo "All HDFS directories created successfully"
     networks:
       - transactionflow-net
 
   # ─── Spark ───────────────────────────────────────────────────────────────────
   spark-master:
-    image: bitnami/spark:3.5
+    image: apache/spark:3.5.1
     container_name: transactionflow-spark-master
     hostname: spark-master
     ports:
       - "${SPARK_MASTER_UI_PORT}:8080"
       - "${SPARK_MASTER_RPC_PORT}:7077"
-    environment:
-      - SPARK_MODE=master
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     networks:
       - transactionflow-net
 
   spark-worker:
-    image: bitnami/spark:3.5
+    image: apache/spark:3.5.1
     container_name: transactionflow-spark-worker
     hostname: spark-worker
     depends_on:
       - spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker ${SPARK_MASTER_URL}
     environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=${SPARK_MASTER_URL}
       - SPARK_WORKER_MEMORY=${SPARK_WORKER_MEMORY}
       - SPARK_WORKER_CORES=${SPARK_WORKER_CORES}
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
     networks:
       - transactionflow-net
 

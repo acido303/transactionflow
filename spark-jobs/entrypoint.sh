@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 echo "Starting TransactionFlow Spark Streaming Job..."
-exec /opt/bitnami/spark/bin/spark-submit \
+exec /opt/spark/bin/spark-submit \
   --master "${SPARK_MASTER_URL:-local[2]}" \
   --driver-memory 1g \
   --executor-memory 1g \

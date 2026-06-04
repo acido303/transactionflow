@@ -6,3 +6,18 @@ body {
   background-color: #0f172a;
   color: #f1f5f9;
 }
+
+.react-flow__controls {
+  background: #000 !important;
+  border-color: #475569 !important;
+}
+
+.react-flow__controls-button {
+  background: #000 !important;
+  border-color: #475569 !important;
+  color: #fff !important;
+}
+
+.react-flow__controls-button svg {
+  fill: #fff !important;
+}
