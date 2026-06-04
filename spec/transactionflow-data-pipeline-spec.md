@@ -1857,3 +1857,67 @@ Spring Boot Producer
 Keep the Hadoop implementation minimal and focused on HDFS.
 
 Do not add YARN, Kerberos, Hive, HBase or extra Hadoop ecosystem components until the core pipeline is working.
+
+---
+
+## 37. As-Built Implementation Notes
+
+The system was implemented end-to-end and runs with `docker compose up --build`. This section records where the delivered system **differs from** or **extends** the original specification above. Where this section and earlier sections disagree, **this section reflects what was actually built**.
+
+### 37.1 Docker Image Choices
+
+The image choices in §26 were a starting skeleton. The working stack uses:
+
+| Service | Spec skeleton | As built | Reason |
+|---|---|---|---|
+| `kafka` / `kafka-init` | `bitnami/kafka:latest` | `apache/kafka:3.7.1` | The `bitnami/kafka:3.7` tag is not published; switched to the official Apache image (KRaft, env vars without the `KAFKA_CFG_` prefix, `CLUSTER_ID`, data dir `/var/lib/kafka/data`). |
+| `spark-*` | `bitnami/spark:latest` | `apache/spark:3.5.1` | Official image; master/worker started via explicit `spark-class` commands, `SPARK_HOME=/opt/spark`. |
+| `hdfs-namenode` / `hdfs-datanode` | `apache/hadoop:3.4.1` | `bde2020/hadoop-namenode` / `-datanode:2.0.0-hadoop3.2.1-java8` | The bde2020 images provide turnkey single-node HDFS with `CORE_CONF_*` / `HDFS_CONF_*` env configuration. |
+| `hdfs-init` | (CLI in hadoop image) | `curlimages/curl:latest` | Directory creation uses the **WebHDFS REST API** (`PUT …?op=MKDIRS`) instead of the Hadoop CLI, which avoided entrypoint conflicts. |
+
+The namenode also sets `extra_hosts: ["hdfs-namenode:127.0.0.1"]` and `hadoop.security.authentication=simple` so `InetAddress.getLocalHost()` resolves before the JVM starts, and the datanode depends on the namenode with `condition: service_started` (not `service_healthy`) to avoid a startup deadlock. The namenode health check verifies HDFS safe mode is **OFF** so `hdfs-init` only runs once writes are allowed.
+
+### 37.2 Single `.env` Configuration
+
+All ports, credentials, topic names, HDFS paths, Spark resources, and the high-value threshold live in a **single root `.env` file**. `docker-compose.yml` references them with `${VAR}` interpolation, so there is one place to change any configuration. (The spec implied per-service env blocks; the as-built design centralises them.)
+
+### 37.3 PostgreSQL Schema — Additional Tables
+
+In addition to the five tables in §14 (`transaction_metrics_by_currency`, `transaction_metrics_by_type`, `transaction_metrics_by_country`, `high_value_transactions`, `pipeline_status`), two tables were added to support the dashboard:
+
+- **`recent_transactions`** — rolling buffer of recently processed transactions (valid + rejected) with a `status` column (`VALID`, `HIGH_VALUE`, `REJECTED`), used by the Recent Transactions view and the metrics summary.
+- **`spark_job_metrics`** — one row per Spark micro-batch (processed/rejected counts, rows/sec, batch duration, files written), used to drive the live pipeline-flow and HDFS status endpoints.
+
+### 37.4 Spark → PostgreSQL JDBC
+
+The PostgreSQL JDBC connection sets **`stringtype=unspecified`** so string values (e.g. the `transactionId`) are cast by PostgreSQL into `UUID` columns. Without it, inserts into `high_value_transactions` / `recent_transactions` fail with a type mismatch. The job uses the `foreachBatch` pattern (required for arbitrary JDBC writes from Structured Streaming) and wraps every sink write in its own try/catch so a single failing sink never stops the stream.
+
+### 37.5 Generator Reference-Data Configuration (extension)
+
+Beyond the generator endpoints in §15, the producer exposes endpoints to **inspect and edit the reference-data lists at runtime**, also proxied through the reporting service and surfaced in the Data Generator UI:
+
+```http
+GET    /api/generator/config
+POST   /api/generator/config/merchants        # body: { "value": "IKEA" }
+DELETE /api/generator/config/merchants        # body: { "value": "IKEA" }
+POST   /api/generator/config/countries        # body: { "code": "NZ" }  (ISO name derived)
+DELETE /api/generator/config/countries        # body: { "code": "NZ" }
+POST   /api/generator/config/unknown-types    # body: { "value": "WISE_TRANSFER" }
+DELETE /api/generator/config/unknown-types    # body: { "value": "WISE_TRANSFER" }
+```
+
+Countries are validated against the official **ISO 3166-1 alpha-2** list (the iban.com country-codes set); only valid codes can be added and the canonical ISO name is always stored. Currencies (`EUR/GBP/USD`) and the supported transaction types remain fixed because the Spark validation logic depends on them. The lists are held in memory (thread-safe) and reset on producer restart.
+
+### 37.6 Frontend Enhancements (extension)
+
+- **Architecture view:** nodes are **draggable**, the custom layout is **persisted to `localStorage`** and restored on reload, with a **Reset layout** button. The 1 s poll updates only live counters/edges, never positions.
+- **Data Generator view:** adds chip-style editors for the reference-data lists above (merchants, countries via an ISO dropdown, unknown types) plus a read-only display of the fixed currencies and valid types.
+- **React Flow controls** restyled to match the dark theme.
+
+### 37.7 Next.js Version
+
+The frontend uses **Next.js 15** (the spec said Next.js generally). It was upgraded from the initially-scaffolded 14.2.x to pick up security patches. The Docker build uses `output: "standalone"`, `npm install` (no committed lockfile), a `.dockerignore` excluding `node_modules`/`.next`, and `typescript.ignoreBuildErrors` so the production image builds without a separate type-check pass.
+
+### 37.8 Documentation & Screenshots
+
+A `README.md` (run/stop instructions, full endpoint reference, data-location notes) and a `docs/screenshots/` gallery covering all eight dashboard pages were added.
