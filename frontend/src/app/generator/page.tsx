@@ -9,6 +9,11 @@ import {
   TrendingUp,
   HelpCircle,
   Shuffle,
+  Plus,
+  X,
+  Store,
+  Globe,
+  Tag,
 } from 'lucide-react'
 import {
   startGenerator,
@@ -16,8 +21,15 @@ import {
   getGeneratorStatus,
   generateOne,
   generateBurst,
+  getGeneratorConfig,
+  addMerchant,
+  removeMerchant,
+  addCountry,
+  removeCountry,
+  addUnknownType,
+  removeUnknownType,
 } from '@/lib/api'
-import type { GeneratorStatus } from '@/types'
+import type { GeneratorStatus, GeneratorConfigData } from '@/types'
 import StatusBadge from '@/components/StatusBadge'
 
 function NumberInput({
@@ -56,6 +68,175 @@ function NumberInput({
   )
 }
 
+function ListEditor({
+  title,
+  description,
+  icon,
+  items,
+  onAdd,
+  onRemove,
+  placeholder,
+  accentColor,
+}: {
+  title: string
+  description: string
+  icon: React.ReactNode
+  items: string[]
+  onAdd: (value: string) => Promise<void>
+  onRemove: (value: string) => Promise<void>
+  placeholder: string
+  accentColor: string
+}) {
+  const [newValue, setNewValue] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function handleAdd() {
+    if (!newValue.trim() || busy) return
+    setBusy(true)
+    try {
+      await onAdd(newValue.trim())
+      setNewValue('')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-700 bg-slate-800 p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <span className={accentColor}>{icon}</span>
+        <div>
+          <h3 className="font-semibold text-slate-200">{title}</h3>
+          <p className="text-xs text-slate-500">{description}</p>
+        </div>
+        <span className="ml-auto text-xs text-slate-500">{items.length} items</span>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {items.map((item) => (
+          <span
+            key={item}
+            className="inline-flex items-center gap-1.5 rounded-full bg-slate-700 px-3 py-1 text-xs text-slate-200"
+          >
+            {item}
+            <button
+              onClick={() => onRemove(item)}
+              className="text-slate-400 hover:text-red-400 transition-colors"
+              title="Remove"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        {items.length === 0 && <span className="text-xs text-slate-600 italic">No items</span>}
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          value={newValue}
+          onChange={(e) => setNewValue(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          placeholder={placeholder}
+          className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        />
+        <button
+          onClick={handleAdd}
+          disabled={busy || !newValue.trim()}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function CountryEditor({
+  countries,
+  onAdd,
+  onRemove,
+}: {
+  countries: { code: string; name: string }[]
+  onAdd: (code: string, name: string) => Promise<void>
+  onRemove: (code: string) => Promise<void>
+}) {
+  const [code, setCode] = useState('')
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function handleAdd() {
+    if (!code.trim() || !name.trim() || busy) return
+    setBusy(true)
+    try {
+      await onAdd(code.trim().toUpperCase(), name.trim())
+      setCode('')
+      setName('')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-700 bg-slate-800 p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <span className="text-green-400"><Globe className="h-5 w-5" /></span>
+        <div>
+          <h3 className="font-semibold text-slate-200">Countries</h3>
+          <p className="text-xs text-slate-500">ISO codes used for the world map activity</p>
+        </div>
+        <span className="ml-auto text-xs text-slate-500">{countries.length} items</span>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {countries.map((c) => (
+          <span
+            key={c.code}
+            className="inline-flex items-center gap-1.5 rounded-full bg-slate-700 px-3 py-1 text-xs text-slate-200"
+          >
+            <span className="font-mono text-blue-400">{c.code}</span>
+            {c.name}
+            <button
+              onClick={() => onRemove(c.code)}
+              className="text-slate-400 hover:text-red-400 transition-colors"
+              title="Remove"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        {countries.length === 0 && <span className="text-xs text-slate-600 italic">No countries</span>}
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          placeholder="Code (e.g. NZ)"
+          maxLength={2}
+          className="w-28 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 uppercase focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          placeholder="Country name (e.g. New Zealand)"
+          className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        />
+        <button
+          onClick={handleAdd}
+          disabled={busy || !code.trim() || !name.trim()}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function GeneratorPage() {
   const [status, setStatus] = useState<GeneratorStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -73,6 +254,9 @@ export default function GeneratorPage() {
   const [burstHighValuePct, setBurstHighValuePct] = useState(5)
   const [burstUnknownTypePct, setBurstUnknownTypePct] = useState(3)
 
+  // Reference data config
+  const [config, setConfig] = useState<GeneratorConfigData | null>(null)
+
   const fetchStatus = useCallback(async () => {
     try {
       const s = await getGeneratorStatus()
@@ -83,11 +267,21 @@ export default function GeneratorPage() {
     }
   }, [])
 
+  const fetchConfig = useCallback(async () => {
+    try {
+      const c = await getGeneratorConfig()
+      setConfig(c)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch config')
+    }
+  }, [])
+
   useEffect(() => {
     fetchStatus()
+    fetchConfig()
     const interval = setInterval(fetchStatus, 2000)
     return () => clearInterval(interval)
-  }, [fetchStatus])
+  }, [fetchStatus, fetchConfig])
 
   function showMsg(msg: string) {
     setActionMsg(msg)
@@ -253,6 +447,81 @@ export default function GeneratorPage() {
           <Zap className="h-4 w-4" />
           Generate Burst
         </button>
+      </div>
+
+      {/* Reference data editors */}
+      <div className="pt-2">
+        <h2 className="text-lg font-semibold text-slate-100">Reference Data</h2>
+        <p className="text-slate-400 text-sm mt-0.5 mb-4">
+          Values the generator draws from when building transactions. Changes apply immediately.
+        </p>
+
+        <div className="space-y-4">
+          {config && (
+            <>
+              <ListEditor
+                title="Merchants"
+                description="Used for CARD_PAYMENT transactions"
+                icon={<Store className="h-5 w-5" />}
+                accentColor="text-blue-400"
+                items={config.merchants}
+                placeholder="Add a merchant (e.g. IKEA)"
+                onAdd={async (v) => setConfig(await addMerchant(v))}
+                onRemove={async (v) => setConfig(await removeMerchant(v))}
+              />
+
+              <CountryEditor
+                countries={config.countries}
+                onAdd={async (code, name) => setConfig(await addCountry(code, name))}
+                onRemove={async (code) => setConfig(await removeCountry(code))}
+              />
+
+              <ListEditor
+                title="Unknown Transaction Types"
+                description="Unsupported types normalised to UNKNOWN by Spark"
+                icon={<Tag className="h-5 w-5" />}
+                accentColor="text-yellow-400"
+                items={config.unknownTypes}
+                placeholder="Add a type (e.g. WISE_TRANSFER)"
+                onAdd={async (v) => setConfig(await addUnknownType(v))}
+                onRemove={async (v) => setConfig(await removeUnknownType(v))}
+              />
+
+              {/* Fixed lists — read only */}
+              <div className="rounded-lg border border-slate-700 bg-slate-800 p-5 space-y-3">
+                <h3 className="font-semibold text-slate-200">Fixed Values</h3>
+                <p className="text-xs text-slate-500 -mt-2">
+                  These are validated by the Spark pipeline and cannot be changed at runtime.
+                </p>
+                <div className="flex gap-8">
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1.5">Currencies</p>
+                    <div className="flex gap-2">
+                      {config.currencies.map((c) => (
+                        <span key={c} className="rounded-full bg-slate-700 px-3 py-1 text-xs font-mono text-blue-400">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1.5">Valid Transaction Types</p>
+                    <div className="flex flex-wrap gap-2">
+                      {config.validTypes.map((t) => (
+                        <span key={t} className="rounded-full bg-slate-700 px-3 py-1 text-xs text-slate-300">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+          {!config && (
+            <p className="text-sm text-slate-600">Loading reference data…</p>
+          )}
+        </div>
       </div>
     </div>
   )

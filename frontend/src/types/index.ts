@@ -190,3 +190,16 @@ export interface BurstConfig {
   highValuePercentage: number
   unknownTypePercentage: number
 }
+
+export interface CountryEntry {
+  code: string
+  name: string
+}
+
+export interface GeneratorConfigData {
+  merchants: string[]
+  countries: CountryEntry[]
+  unknownTypes: string[]
+  currencies: string[]
+  validTypes: string[]
+}

@@ -1,42 +1,44 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Database, FolderOpen, Clock, CheckCircle, XCircle } from 'lucide-react'
+import { Database, FolderOpen, Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
 import { getHdfsStatus } from '@/lib/api'
-import type { HdfsStatus, HdfsPathInfo } from '@/types'
-import StatusBadge from '@/components/StatusBadge'
+import type { HdfsStatus } from '@/types'
 
-function formatBytes(bytes?: number): string {
-  if (bytes === undefined) return '—'
-  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(2)} GB`
-  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(2)} MB`
-  if (bytes >= 1_024) return `${(bytes / 1_024).toFixed(1)} KB`
-  return `${bytes} B`
+
+function formatTime(ts?: string | null): string {
+  if (!ts) return '—'
+  try { return new Date(ts).toLocaleString() } catch { return ts }
 }
 
-function formatTime(ts?: string): string {
-  if (!ts) return '—'
-  try {
-    return new Date(ts).toLocaleString()
-  } catch {
-    return ts
-  }
+function StatRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between py-1.5 border-b border-slate-700/50 last:border-0">
+      <span className="text-xs text-slate-500">{label}</span>
+      <span className={`text-xs ${mono ? 'font-mono text-blue-400' : 'text-slate-200 font-medium'}`}>
+        {value}
+      </span>
+    </div>
+  )
 }
 
 interface PathCardProps {
   title: string
   description: string
-  icon: React.ReactNode
-  info?: HdfsPathInfo
-  accentColor?: string
+  path: string
+  fileCount: number
+  lastWrite?: string | null
+  statusText?: string
+  accent: string
+  iconColor: string
 }
 
-function PathCard({ title, description, icon, info, accentColor = 'border-slate-700' }: PathCardProps) {
+function PathCard({ title, description, path, fileCount, lastWrite, statusText, accent, iconColor }: PathCardProps) {
   return (
-    <div className={`rounded-lg border ${accentColor} bg-slate-800 p-5`}>
+    <div className={`rounded-lg border ${accent} bg-slate-800 p-5`}>
       <div className="flex items-start gap-3 mb-4">
-        <div className="p-2 rounded-lg bg-slate-700/50 text-slate-300 flex-shrink-0">
-          {icon}
+        <div className={`p-2 rounded-lg bg-slate-700/50 flex-shrink-0 ${iconColor}`}>
+          <FolderOpen className="h-5 w-5" />
         </div>
         <div>
           <h3 className="font-semibold text-slate-200">{title}</h3>
@@ -44,46 +46,12 @@ function PathCard({ title, description, icon, info, accentColor = 'border-slate-
         </div>
       </div>
 
-      {info ? (
-        <div className="space-y-3">
-          {info.path && (
-            <div>
-              <p className="text-xs text-slate-500 mb-1">HDFS Path</p>
-              <p className="text-xs font-mono text-blue-400 bg-slate-900 rounded px-2 py-1.5 break-all">
-                {info.path}
-              </p>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            {info.fileCount !== undefined && (
-              <div>
-                <p className="text-xs text-slate-500">File Count</p>
-                <p className="text-sm font-semibold text-slate-200 mt-0.5">{info.fileCount.toLocaleString()}</p>
-              </div>
-            )}
-            {info.totalSize !== undefined && (
-              <div>
-                <p className="text-xs text-slate-500">Total Size</p>
-                <p className="text-sm font-semibold text-slate-200 mt-0.5">{formatBytes(info.totalSize)}</p>
-              </div>
-            )}
-          </div>
-          {info.lastWrite && (
-            <div>
-              <p className="text-xs text-slate-500">Last Write</p>
-              <p className="text-xs text-slate-300 mt-0.5">{formatTime(info.lastWrite)}</p>
-            </div>
-          )}
-          {info.status && (
-            <div>
-              <p className="text-xs text-slate-500 mb-1">Status</p>
-              <StatusBadge status={info.status as 'OK' | 'ERROR' | 'RUNNING'} />
-            </div>
-          )}
-        </div>
-      ) : (
-        <p className="text-sm text-slate-600">No data available</p>
-      )}
+      <div className="space-y-0">
+        <StatRow label="HDFS Path" value={path} mono />
+        <StatRow label="Files written" value={fileCount.toLocaleString()} />
+        {statusText && <StatRow label="Status" value={statusText} />}
+        {lastWrite && <StatRow label="Last write" value={formatTime(lastWrite)} />}
+      </div>
     </div>
   )
 }
@@ -91,11 +59,13 @@ function PathCard({ title, description, icon, info, accentColor = 'border-slate-
 export default function HdfsPage() {
   const [status, setStatus] = useState<HdfsStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
 
   const fetchData = useCallback(async () => {
     try {
       const data = await getHdfsStatus()
       setStatus(data)
+      setLastRefresh(new Date())
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch HDFS status')
@@ -108,106 +78,132 @@ export default function HdfsPage() {
     return () => clearInterval(interval)
   }, [fetchData])
 
-  const isAvailable = status?.isAvailable ?? false
+  const isRunning = status?.hdfsStatus === 'RUNNING'
 
   return (
     <div className="p-6 space-y-6">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
             <Database className="h-6 w-6 text-slate-300" />
             <h1 className="text-2xl font-bold text-slate-100">HDFS Storage</h1>
           </div>
-          <p className="text-slate-400 text-sm mt-1 ml-9">Hadoop distributed file system status — polling every 10s</p>
+          <p className="text-slate-400 text-sm mt-1 ml-9">
+            Hadoop distributed file system status — polling every 10s
+          </p>
         </div>
         <div className="flex items-center gap-4">
           {error && (
-            <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>
+            <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              {error}
+            </p>
           )}
-          <div className="flex items-center gap-2">
-            {isAvailable ? (
-              <CheckCircle className="h-4 w-4 text-green-400" />
-            ) : (
-              <XCircle className="h-4 w-4 text-red-400" />
-            )}
-            <span className={`text-sm ${isAvailable ? 'text-green-400' : 'text-red-400'}`}>
-              {status ? (isAvailable ? 'Available' : 'Unavailable') : 'Checking…'}
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Clock className="h-3.5 w-3.5" />
+            <span>
+              {lastRefresh ? `Updated ${lastRefresh.toLocaleTimeString()}` : 'Loading…'}
             </span>
           </div>
+          <button
+            onClick={fetchData}
+            className="flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700 transition-colors"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Refresh
+          </button>
         </div>
       </div>
 
-      {/* Overall status banner */}
+      {/* Status banner */}
       <div className={`rounded-lg border p-4 flex items-center justify-between ${
-        isAvailable
+        isRunning
           ? 'border-green-500/20 bg-green-500/5'
-          : 'border-red-500/20 bg-red-500/5'
+          : 'border-amber-500/20 bg-amber-500/5'
       }`}>
         <div className="flex items-center gap-3">
-          {isAvailable ? (
+          {isRunning ? (
             <CheckCircle className="h-5 w-5 text-green-400" />
           ) : (
-            <XCircle className="h-5 w-5 text-red-400" />
+            <XCircle className="h-5 w-5 text-amber-400" />
           )}
           <div>
-            <p className={`font-medium text-sm ${isAvailable ? 'text-green-400' : 'text-red-400'}`}>
-              HDFS {isAvailable ? 'is available and accepting writes' : 'is not available'}
+            <p className={`font-medium text-sm ${isRunning ? 'text-green-400' : 'text-amber-400'}`}>
+              {isRunning ? 'HDFS is active — Spark is writing data' : 'Waiting for Spark to write first batch'}
             </p>
-            {status?.lastCheckpoint && (
-              <p className="text-xs text-slate-500 mt-0.5">
-                Last checkpoint: {formatTime(status.lastCheckpoint)}
-              </p>
+            {status?.namenodeUrl && (
+              <p className="text-xs text-slate-500 mt-0.5 font-mono">{status.namenodeUrl}</p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <Clock className="h-3.5 w-3.5" />
-          <span>Refreshes every 10s</span>
-        </div>
+        {status && (
+          <div className="text-right text-xs text-slate-500 space-y-0.5">
+            <p>Batch #{status.lastBatchId ?? '—'}</p>
+            <p>Checkpoint: <span className={status.checkpointStatus === 'ACTIVE' ? 'text-green-400' : 'text-slate-400'}>
+              {status.checkpointStatus ?? '—'}
+            </span></p>
+          </div>
+        )}
       </div>
 
       {/* Path cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <PathCard
-          title="Raw Transactions"
-          description="All raw incoming transactions stored as Parquet"
-          icon={<FolderOpen className="h-5 w-5" />}
-          info={status?.raw}
-          accentColor="border-blue-500/20"
-        />
-        <PathCard
-          title="Rejected Transactions"
-          description="Invalid and rejected transactions for audit"
-          icon={<FolderOpen className="h-5 w-5" />}
-          info={status?.rejected}
-          accentColor="border-red-500/20"
-        />
-        <PathCard
-          title="Checkpoints"
-          description="Spark Structured Streaming checkpoint data"
-          icon={<Database className="h-5 w-5" />}
-          info={status?.checkpoints}
-          accentColor="border-purple-500/20"
-        />
-      </div>
+      {status ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <PathCard
+            title="Raw Transactions"
+            description="Valid transactions stored as partitioned Parquet"
+            path={status.rawPath}
+            fileCount={status.rawFilesWritten ?? 0}
+            lastWrite={status.lastRecordedAt}
+            accent="border-blue-500/20"
+            iconColor="text-blue-400"
+          />
+          <PathCard
+            title="Rejected Transactions"
+            description="Invalid records stored as JSON for audit"
+            path={status.rejectedPath}
+            fileCount={status.rejectedFilesWritten ?? 0}
+            lastWrite={status.lastRecordedAt}
+            accent="border-red-500/20"
+            iconColor="text-red-400"
+          />
+          <PathCard
+            title="Checkpoints"
+            description="Spark Structured Streaming recovery data"
+            path={status.checkpointPath}
+            fileCount={0}
+            statusText={status.checkpointStatus ?? '—'}
+            lastWrite={status.lastRecordedAt}
+            accent="border-purple-500/20"
+            iconColor="text-purple-400"
+          />
+        </div>
+      ) : (
+        <div className="rounded-lg border border-slate-700 bg-slate-800 p-12 text-center text-slate-500 text-sm">
+          {error ? error : 'Loading HDFS status…'}
+        </div>
+      )}
 
-      {/* Checkpoint status */}
-      {status?.lastCheckpoint && (
+      {/* HDFS paths reference */}
+      {status && (
         <section>
-          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Checkpoint Info</h2>
-          <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-purple-500/10">
-                <CheckCircle className="h-5 w-5 text-purple-400" />
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            HDFS Path Reference
+          </h2>
+          <div className="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-2">
+            {[
+              { label: 'Raw',         path: status.rawPath },
+              { label: 'Rejected',    path: status.rejectedPath },
+              { label: 'Checkpoints', path: status.checkpointPath },
+            ].map(({ label, path }) => (
+              <div key={label} className="flex items-center gap-3">
+                <span className="text-xs text-slate-500 w-24 flex-shrink-0">{label}</span>
+                <code className="text-xs font-mono text-blue-400 bg-slate-900 rounded px-2 py-1 flex-1 break-all">
+                  {path}
+                </code>
               </div>
-              <div>
-                <p className="text-sm font-medium text-slate-200">Last Successful Checkpoint</p>
-                <p className="text-xs text-slate-500 mt-0.5">{formatTime(status.lastCheckpoint)}</p>
-              </div>
-              <div className="ml-auto">
-                <StatusBadge status="OK" />
-              </div>
-            </div>
+            ))}
           </div>
         </section>
       )}

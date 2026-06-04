@@ -1,12 +1,16 @@
 package com.acido303.transactionflow.producer.controller;
 
 import com.acido303.transactionflow.producer.dto.BurstRequest;
+import com.acido303.transactionflow.producer.dto.GeneratorConfigDto;
 import com.acido303.transactionflow.producer.dto.GeneratorStatusResponse;
 import com.acido303.transactionflow.producer.dto.StartGeneratorRequest;
+import com.acido303.transactionflow.producer.generator.TransactionGenerator;
 import com.acido303.transactionflow.producer.service.GeneratorService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 /**
  * REST API for controlling the transaction generator.
@@ -18,9 +22,11 @@ import org.springframework.web.bind.annotation.*;
 public class GeneratorController {
 
     private final GeneratorService generatorService;
+    private final TransactionGenerator transactionGenerator;
 
-    public GeneratorController(GeneratorService generatorService) {
+    public GeneratorController(GeneratorService generatorService, TransactionGenerator transactionGenerator) {
         this.generatorService = generatorService;
+        this.transactionGenerator = transactionGenerator;
     }
 
     // -------------------------------------------------------------------------
@@ -110,6 +116,51 @@ public class GeneratorController {
         log.info("POST /api/generator/transaction/unknown-type");
         generatorService.generateOne("unknown-type");
         return ResponseEntity.ok(generatorService.getStatus());
+    }
+
+    // -------------------------------------------------------------------------
+    // Generator configuration (mutable reference data lists)
+    // -------------------------------------------------------------------------
+
+    @GetMapping("/config")
+    public ResponseEntity<GeneratorConfigDto> getConfig() {
+        return ResponseEntity.ok(transactionGenerator.getConfig());
+    }
+
+    @PostMapping("/config/merchants")
+    public ResponseEntity<GeneratorConfigDto> addMerchant(@RequestBody Map<String, String> body) {
+        transactionGenerator.addMerchant(body.get("value"));
+        return ResponseEntity.ok(transactionGenerator.getConfig());
+    }
+
+    @DeleteMapping("/config/merchants")
+    public ResponseEntity<GeneratorConfigDto> removeMerchant(@RequestBody Map<String, String> body) {
+        transactionGenerator.removeMerchant(body.get("value"));
+        return ResponseEntity.ok(transactionGenerator.getConfig());
+    }
+
+    @PostMapping("/config/countries")
+    public ResponseEntity<GeneratorConfigDto> addCountry(@RequestBody Map<String, String> body) {
+        transactionGenerator.addCountry(body.get("code"), body.get("name"));
+        return ResponseEntity.ok(transactionGenerator.getConfig());
+    }
+
+    @DeleteMapping("/config/countries")
+    public ResponseEntity<GeneratorConfigDto> removeCountry(@RequestBody Map<String, String> body) {
+        transactionGenerator.removeCountry(body.get("code"));
+        return ResponseEntity.ok(transactionGenerator.getConfig());
+    }
+
+    @PostMapping("/config/unknown-types")
+    public ResponseEntity<GeneratorConfigDto> addUnknownType(@RequestBody Map<String, String> body) {
+        transactionGenerator.addUnknownType(body.get("value"));
+        return ResponseEntity.ok(transactionGenerator.getConfig());
+    }
+
+    @DeleteMapping("/config/unknown-types")
+    public ResponseEntity<GeneratorConfigDto> removeUnknownType(@RequestBody Map<String, String> body) {
+        transactionGenerator.removeUnknownType(body.get("value"));
+        return ResponseEntity.ok(transactionGenerator.getConfig());
     }
 
     // -------------------------------------------------------------------------

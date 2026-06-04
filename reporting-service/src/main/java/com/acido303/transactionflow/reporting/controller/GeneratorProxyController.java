@@ -7,6 +7,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -67,6 +68,43 @@ public class GeneratorProxyController {
         return proxyPost("/api/generator/burst", body);
     }
 
+    // ── Generator configuration proxy ─────────────────────────────────────────
+
+    @GetMapping("/config")
+    public ResponseEntity<Object> getConfig() {
+        return proxyGet("/api/generator/config");
+    }
+
+    @PostMapping("/config/merchants")
+    public ResponseEntity<Object> addMerchant(@RequestBody(required = false) Map<String, Object> body) {
+        return proxyPost("/api/generator/config/merchants", body);
+    }
+
+    @DeleteMapping("/config/merchants")
+    public ResponseEntity<Object> removeMerchant(@RequestBody(required = false) Map<String, Object> body) {
+        return proxyDelete("/api/generator/config/merchants", body);
+    }
+
+    @PostMapping("/config/countries")
+    public ResponseEntity<Object> addCountry(@RequestBody(required = false) Map<String, Object> body) {
+        return proxyPost("/api/generator/config/countries", body);
+    }
+
+    @DeleteMapping("/config/countries")
+    public ResponseEntity<Object> removeCountry(@RequestBody(required = false) Map<String, Object> body) {
+        return proxyDelete("/api/generator/config/countries", body);
+    }
+
+    @PostMapping("/config/unknown-types")
+    public ResponseEntity<Object> addUnknownType(@RequestBody(required = false) Map<String, Object> body) {
+        return proxyPost("/api/generator/config/unknown-types", body);
+    }
+
+    @DeleteMapping("/config/unknown-types")
+    public ResponseEntity<Object> removeUnknownType(@RequestBody(required = false) Map<String, Object> body) {
+        return proxyDelete("/api/generator/config/unknown-types", body);
+    }
+
     private ResponseEntity<Object> proxyGet(String path) {
         try {
             String url = producerServiceUrl + path;
@@ -84,6 +122,19 @@ public class GeneratorProxyController {
             headers.set("Content-Type", "application/json");
             HttpEntity<Object> entity = new HttpEntity<>(body, headers);
             return restTemplate.exchange(url, HttpMethod.POST, entity, Object.class);
+        } catch (Exception e) {
+            return ResponseEntity.status(503)
+                    .body(Map.of("error", "Producer service unavailable", "message", e.getMessage()));
+        }
+    }
+
+    private ResponseEntity<Object> proxyDelete(String path, Object body) {
+        try {
+            String url = producerServiceUrl + path;
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Content-Type", "application/json");
+            HttpEntity<Object> entity = new HttpEntity<>(body, headers);
+            return restTemplate.exchange(url, HttpMethod.DELETE, entity, Object.class);
         } catch (Exception e) {
             return ResponseEntity.status(503)
                     .body(Map.of("error", "Producer service unavailable", "message", e.getMessage()));

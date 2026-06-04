@@ -10,6 +10,7 @@ import type {
   HdfsStatus,
   GeneratorStatus,
   GeneratorConfig,
+  GeneratorConfigData,
   BurstConfig,
 } from '@/types'
 
@@ -106,5 +107,53 @@ export async function generateBurst(config: BurstConfig): Promise<void> {
   await fetchJson<unknown>(`${BASE_URL}/api/generator/burst`, {
     method: 'POST',
     body: JSON.stringify(config),
+  })
+}
+
+// ─── Generator configuration (reference data lists) ──────────────────────────
+
+export async function getGeneratorConfig(): Promise<GeneratorConfigData> {
+  return fetchJson<GeneratorConfigData>(`${BASE_URL}/api/generator/config`)
+}
+
+export async function addMerchant(value: string): Promise<GeneratorConfigData> {
+  return fetchJson<GeneratorConfigData>(`${BASE_URL}/api/generator/config/merchants`, {
+    method: 'POST',
+    body: JSON.stringify({ value }),
+  })
+}
+
+export async function removeMerchant(value: string): Promise<GeneratorConfigData> {
+  return fetchJson<GeneratorConfigData>(`${BASE_URL}/api/generator/config/merchants`, {
+    method: 'DELETE',
+    body: JSON.stringify({ value }),
+  })
+}
+
+export async function addCountry(code: string, name: string): Promise<GeneratorConfigData> {
+  return fetchJson<GeneratorConfigData>(`${BASE_URL}/api/generator/config/countries`, {
+    method: 'POST',
+    body: JSON.stringify({ code, name }),
+  })
+}
+
+export async function removeCountry(code: string): Promise<GeneratorConfigData> {
+  return fetchJson<GeneratorConfigData>(`${BASE_URL}/api/generator/config/countries`, {
+    method: 'DELETE',
+    body: JSON.stringify({ code }),
+  })
+}
+
+export async function addUnknownType(value: string): Promise<GeneratorConfigData> {
+  return fetchJson<GeneratorConfigData>(`${BASE_URL}/api/generator/config/unknown-types`, {
+    method: 'POST',
+    body: JSON.stringify({ value }),
+  })
+}
+
+export async function removeUnknownType(value: string): Promise<GeneratorConfigData> {
+  return fetchJson<GeneratorConfigData>(`${BASE_URL}/api/generator/config/unknown-types`, {
+    method: 'DELETE',
+    body: JSON.stringify({ value }),
   })
 }
