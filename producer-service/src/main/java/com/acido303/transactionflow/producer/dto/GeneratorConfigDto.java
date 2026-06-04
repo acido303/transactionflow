@@ -15,6 +15,7 @@ public class GeneratorConfigDto {
 
     private List<String> merchants;
     private List<CountryEntry> countries;
+    private List<CountryEntry> availableCountries;
     private List<String> unknownTypes;
     private List<String> currencies;
     private List<String> validTypes;

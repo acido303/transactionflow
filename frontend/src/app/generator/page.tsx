@@ -154,24 +154,30 @@ function ListEditor({
 
 function CountryEditor({
   countries,
+  available,
   onAdd,
   onRemove,
 }: {
   countries: { code: string; name: string }[]
-  onAdd: (code: string, name: string) => Promise<void>
+  available: { code: string; name: string }[]
+  onAdd: (code: string) => Promise<void>
   onRemove: (code: string) => Promise<void>
 }) {
   const [code, setCode] = useState('')
-  const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // Only offer ISO countries that haven't been added yet, sorted by name
+  const addedCodes = new Set(countries.map((c) => c.code))
+  const selectable = available
+    .filter((c) => !addedCodes.has(c.code))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
   async function handleAdd() {
-    if (!code.trim() || !name.trim() || busy) return
+    if (!code || busy) return
     setBusy(true)
     try {
-      await onAdd(code.trim().toUpperCase(), name.trim())
+      await onAdd(code)
       setCode('')
-      setName('')
     } finally {
       setBusy(false)
     }
@@ -183,7 +189,9 @@ function CountryEditor({
         <span className="text-green-400"><Globe className="h-5 w-5" /></span>
         <div>
           <h3 className="font-semibold text-slate-200">Countries</h3>
-          <p className="text-xs text-slate-500">ISO codes used for the world map activity</p>
+          <p className="text-xs text-slate-500">
+            ISO 3166-1 alpha-2 codes used for the world map activity
+          </p>
         </div>
         <span className="ml-auto text-xs text-slate-500">{countries.length} items</span>
       </div>
@@ -209,24 +217,21 @@ function CountryEditor({
       </div>
 
       <div className="flex gap-2">
-        <input
+        <select
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          placeholder="Code (e.g. NZ)"
-          maxLength={2}
-          className="w-28 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 uppercase focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-        />
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          placeholder="Country name (e.g. New Zealand)"
           className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-        />
+        >
+          <option value="">Select a country to add…</option>
+          {selectable.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.name} ({c.code})
+            </option>
+          ))}
+        </select>
         <button
           onClick={handleAdd}
-          disabled={busy || !code.trim() || !name.trim()}
+          disabled={busy || !code}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Plus className="h-4 w-4" />
@@ -472,7 +477,8 @@ export default function GeneratorPage() {
 
               <CountryEditor
                 countries={config.countries}
-                onAdd={async (code, name) => setConfig(await addCountry(code, name))}
+                available={config.availableCountries}
+                onAdd={async (code) => setConfig(await addCountry(code, ''))}
                 onRemove={async (code) => setConfig(await removeCountry(code))}
               />
 

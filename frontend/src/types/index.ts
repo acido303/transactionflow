@@ -199,6 +199,7 @@ export interface CountryEntry {
 export interface GeneratorConfigData {
   merchants: string[]
   countries: CountryEntry[]
+  availableCountries: CountryEntry[]
   unknownTypes: string[]
   currencies: string[]
   validTypes: string[]

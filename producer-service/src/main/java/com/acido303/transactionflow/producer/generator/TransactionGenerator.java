@@ -112,9 +112,14 @@ public class TransactionGenerator {
                 .map(c -> new GeneratorConfigDto.CountryEntry(c[0], c[1]))
                 .collect(Collectors.toList());
 
+        List<GeneratorConfigDto.CountryEntry> available = IsoCountries.CODE_TO_NAME.entrySet().stream()
+                .map(e -> new GeneratorConfigDto.CountryEntry(e.getKey(), e.getValue()))
+                .collect(Collectors.toList());
+
         return GeneratorConfigDto.builder()
                 .merchants(new ArrayList<>(merchants))
                 .countries(countryEntries)
+                .availableCountries(available)
                 .unknownTypes(new ArrayList<>(unknownTypes))
                 .currencies(CURRENCIES)
                 .validTypes(VALID_TYPES)
@@ -137,12 +142,16 @@ public class TransactionGenerator {
 
     // ── Countries ─────────────────────────────────────────────────────────────
 
-    public boolean addCountry(String code, String name) {
-        if (code == null || code.isBlank() || name == null || name.isBlank()) return false;
+    /**
+     * Adds a country by ISO 3166-1 alpha-2 code. The code must be a valid ISO
+     * code; the official ISO name is always used (any passed name is ignored).
+     */
+    public boolean addCountry(String code, String ignoredName) {
+        if (!IsoCountries.isValidCode(code)) return false;
         String trimmedCode = code.trim().toUpperCase();
         boolean exists = countries.stream().anyMatch(c -> c[0].equalsIgnoreCase(trimmedCode));
         if (exists) return false;
-        countries.add(new String[]{trimmedCode, name.trim()});
+        countries.add(new String[]{trimmedCode, IsoCountries.nameForCode(trimmedCode)});
         return true;
     }
 
