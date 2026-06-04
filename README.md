@@ -257,6 +257,52 @@ docker exec -it transactionflow-hdfs-namenode hdfs dfs -ls -R /data/transactionf
 
 ---
 
+## Where the Data Lives
+
+All persistent data is stored in **four Docker named volumes** (declared at the bottom of `docker-compose.yml`):
+
+| Volume | What's in it | Container path |
+|---|---|---|
+| `kafka-data` | Kafka topic logs (the raw event stream) | `/var/lib/kafka/data` |
+| `postgres-data` | PostgreSQL tables — metrics, high-value, recent transactions | `/var/lib/postgresql/data` |
+| `hdfs-namenode-data` | HDFS filesystem metadata | `/hadoop/dfs/name` |
+| `hdfs-datanode-data` | HDFS file blocks — the actual Parquet/JSON files | `/hadoop/dfs/data` |
+
+### Physical location
+
+These are **Docker-managed named volumes**, not bind-mounts to a folder under the project directory. On Windows with Docker Desktop (WSL2 backend) they live **inside the WSL2 virtual disk**, not on the normal Windows filesystem — so you don't browse them directly in Explorer; you go through Docker.
+
+```bash
+# List the volumes
+docker volume ls
+
+# Show a volume's real mountpoint (inside the Docker/WSL VM)
+docker volume inspect transactionflow_postgres-data
+```
+
+### Inspecting the data
+
+The easiest way to look at the data is through the containers / web UIs:
+
+```bash
+# PostgreSQL — Adminer at http://localhost:8086, or:
+docker exec -it transactionflow-postgres psql -U transactionflow -d transactionflow -c "SELECT count(*) FROM recent_transactions;"
+
+# HDFS Parquet/JSON files — NameNode UI at http://localhost:9870, or:
+docker exec -it transactionflow-hdfs-namenode hdfs dfs -ls -R /data/transactionflow
+
+# Kafka messages — Kafka UI at http://localhost:8085
+```
+
+### Persistence
+
+- `docker compose down` → containers removed, **volumes kept** (data survives a restart).
+- `docker compose down -v` → **volumes deleted too** (everything wiped).
+
+> Want the data in a visible folder under `./data/` instead of named volumes? That requires switching the volumes to bind-mounts in `docker-compose.yml` — easier to browse, but can have permission quirks with the HDFS/Postgres images on Windows.
+
+---
+
 ## Repository Structure
 
 ```
